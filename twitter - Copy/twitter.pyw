@@ -1,10 +1,7 @@
-import tweepy
-import webbrowser
-import time
-import json
-import asyncio
-import telegram
-import winsound
+import telegram, tweepy, json
+
+
+
 
 #----- Configuring api --------------------------------------------------------
 
@@ -21,44 +18,78 @@ api = tweepy.API(auth, wait_on_rate_limit= True)
 #-----------------------------------------------------------------------------
 # Initialising telegram bot
 
-bot = telegram.Bot(token='')
+bot = telegram.Bot(token='2027920436:AAH_t04NQyqXCl4wBcJ9PgYW6BoKbp-5KB8')
 
 #-----------------------------------------------------------------------------
-kol = ['jack','elonmusk'] #key opinion leader that you want to track
+twitterHandlersToCheck = ['']
 
 
 temp = ''
-data ={}
+dataFromJsonFile ={}
 message = []
 api_counter =0
 def compare():
-    print('test')
+    print('Working perfectly')
     temp = ''
-    data ={}
+    global dataFromJsonFile
     message = []
     with open('twitter_account.json') as f:
-        data = json.load(f)
-        for user in kol:
-            user_friend = api.friends_ids(user)
-            difference = list(set(user_friend) - set(data[user]))
-            data[user] = user_friend
+        dataFromJsonFile = json.load(f)
+        for twitterHandler in twitterHandlersToCheck:
+            try:
+                twitterHandleFriends = api.friends_ids(twitterHandler)
+            except:
+                continue
+            try:
+                difference = list(set(twitterHandleFriends) - set(dataFromJsonFile[twitterHandler]))
+            except:
+                dataFromJsonFile[twitterHandler] = twitterHandleFriends
+                print('new user: ',twitterHandler)
+                send_message_to_telegram = f'Bot is following new user :@{twitterHandler}'
+                bot.send_message(chat_id ='',text=send_message_to_telegram)
+                continue
             for i in difference:
-                temp_message = '@'+user+'  just followed https://twitter.com/'+api.get_user(str(i))._json['screen_name']
-                message.append(temp_message)
+                newFriend = api.get_user(str(i))._json
+                message_placeholder = '@'+twitterHandler+'  just followed https://twitter.com/'+newFriend['screen_name'] + f'\nFollower : {newFriend["followers_count"]} '
+                try:
+                    if int(newFriend["followers_count"]) < 500:
+                        message_placeholder += '🔴'
+                    elif int(newFriend["followers_count"]) < 3000:
+                        message_placeholder +='🟡'
+                    else:
+                        message_placeholder += '🟢'
+                    message_placeholder += f'\Website: {newFriend["url"]}'
+                except:
+                    print('error in try except function')
+                message.append(message_placeholder)
     api_counter =1
     f.close()
     reset_database()
     for i in message:
         bot.send_message(chat_id ='',text=i)
 
-def reset_database():
-    with open('twitter_account.json','r+') as f:
-        if api_counter == 0:
-            for user in kol:
-                data[user] = api.friends_ids(user)
-        json.dump(data,f)
-        f.close()
 
-        
-while True:
-    compare()
+
+def reset_database():
+    if api_counter == 0:
+        for user in twitterHandlersToCheck:
+            dataFromJsonFile[user] = api.friends_ids(user)
+            print(user)
+    with open('twitter_account.json','w') as f:
+        json.dump(dataFromJsonFile,f)
+        print('writing data')
+        f.close()
+   
+
+def _main():
+    try:
+        while True:
+            compare()
+    except:
+        print('Error')
+        return _main()
+
+
+
+_main()
+
