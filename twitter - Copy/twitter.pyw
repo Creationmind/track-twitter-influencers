@@ -18,7 +18,7 @@ api = tweepy.API(auth, wait_on_rate_limit= True)
 #-----------------------------------------------------------------------------
 # Initialising telegram bot
 
-bot = telegram.Bot(token='2027920436:AAH_t04NQyqXCl4wBcJ9PgYW6BoKbp-5KB8')
+bot = telegram.Bot(token='')
 
 #-----------------------------------------------------------------------------
 twitterHandlersToCheck = ['']
