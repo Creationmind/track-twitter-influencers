@@ -1,95 +1,133 @@
-import telegram, tweepy, json
+import tweepy
+import json
+import telegram
 
 
-
-
-#----- Configuring api --------------------------------------------------------
+# ----- Configuring api --------------------------------------------------------
 
 consumer_key = ""
-consumer_secret =  ""
-Bearer_token =  ""
+consumer_secret = ""
+Bearer_token = ""
 access_token = ""
-access_token_secret	= ""
+access_token_secret = ""
 auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
 auth.set_access_token(access_token, access_token_secret)
-api = tweepy.API(auth)
-api = tweepy.API(auth, wait_on_rate_limit= True)
+api = tweepy.API(auth, wait_on_rate_limit=True)
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Initialising telegram bot
 
 bot = telegram.Bot(token='')
 
-#-----------------------------------------------------------------------------
-twitterHandlersToCheck = ['']
+# -----------------------------------------------------------------------------
+trackeeList = []
 
 
-temp = ''
-dataFromJsonFile ={}
-message = []
-api_counter =0
-def compare():
-    print('Working perfectly')
-    temp = ''
-    global dataFromJsonFile
-    message = []
+
+def loadJsonFile():
     with open('twitter_account.json') as f:
-        dataFromJsonFile = json.load(f)
-        for twitterHandler in twitterHandlersToCheck:
-            try:
-                twitterHandleFriends = api.friends_ids(twitterHandler)
-            except:
-                continue
-            try:
-                difference = list(set(twitterHandleFriends) - set(dataFromJsonFile[twitterHandler]))
-            except:
-                dataFromJsonFile[twitterHandler] = twitterHandleFriends
-                print('new user: ',twitterHandler)
-                send_message_to_telegram = f'Bot is following new user :@{twitterHandler}'
-                bot.send_message(chat_id ='',text=send_message_to_telegram)
-                continue
-            for i in difference:
-                newFriend = api.get_user(str(i))._json
-                message_placeholder = '@'+twitterHandler+'  just followed https://twitter.com/'+newFriend['screen_name'] + f'\nFollower : {newFriend["followers_count"]} '
-                try:
-                    if int(newFriend["followers_count"]) < 500:
-                        message_placeholder += '🔴'
-                    elif int(newFriend["followers_count"]) < 3000:
-                        message_placeholder +='🟡'
-                    else:
-                        message_placeholder += '🟢'
-                    message_placeholder += f'\Website: {newFriend["url"]}'
-                except:
-                    print('error in try except function')
-                message.append(message_placeholder)
-    api_counter =1
-    f.close()
-    reset_database()
-    for i in message:
-        bot.send_message(chat_id ='',text=i)
+        jsonData = json.load(f)
+        f.close()
+    return jsonData
 
 
-
-def reset_database():
-    if api_counter == 0:
-        for user in twitterHandlersToCheck:
-            dataFromJsonFile[user] = api.friends_ids(user)
-            print(user)
-    with open('twitter_account.json','w') as f:
-        json.dump(dataFromJsonFile,f)
+def writeJsonData(writeData):
+    with open('twitter_account.json', 'w') as f:
+        json.dump(writeData, f)
         print('writing data')
         f.close()
-   
+    return
+
+
+def hardReset():
+    oldJsonData = loadJsonFile()
+    for user in trackeeList:
+        print(f'Screening {user} ...')
+        try:
+            oldJsonData[user] = getFriendList(user)
+        except:
+            print(
+                f'API could not fetch {user} details, please check if ID and messageList.')
+            trackeeList.remove(user)
+    writeJsonData(oldJsonData)
+    print('Hard reset done')
+    return
+
+
+def getFriendList(user):
+    friendList = api.friends_ids(user)
+    return friendList
+
+
+def seperateNewfromOld(newList, oldList):
+    difference = list(set(newList) - set(oldList))
+    return difference
+
+
+def compare():
+#-------------------- Defining function scope variables -
+    messageList = []
+    oldJsonData = loadJsonFile()
+#-------------------- Helper functions ------------------
+    def appendMessageList(trackee, listOfNewFollowers):
+        for newUsers in listOfNewFollowers:
+            getNewUserInfo = api.get_user(str(newUsers))._json
+            temp_message = '@' + trackee + '  just followed https://twitter.com/' + \
+                getNewUserInfo['screen_name'] + \
+                f'\nFollower : {getNewUserInfo["followers_count"]} '
+            try:
+                followerCount = int(getNewUserInfo["followers_count"])
+                if followerCount < 500:
+                    temp_message += '🔴'
+                elif followerCount < 3000:
+                    temp_message += '🟡'
+                else:
+                    temp_message += '🟢'
+                temp_message += f'\Website: {getNewUserInfo["url"]}'
+            except:
+                print('Error in sending telegram message')
+            messageList.append(temp_message)
+        return
+
+    def appendNewTrackee(trackee, newTrackeeData):  # added new user to track
+        print('new user: ', trackee)
+        oldJsonData[trackee] = newTrackeeData
+        messageToSendTelegram = f'Bot is following new user :@{trackee}'
+        bot.send_message(chat_id='', text=messageToSendTelegram)
+        return
+#----------------------------- Logic ----------------------------
+    for trackee in trackeeList:
+        print(f'Screning {trackee}')
+        
+        try:
+            friendListFromApi = getFriendList(trackee)
+        except:
+            print(f'API could not fetch {trackee} details, please check if ID and messageList.')
+            trackeeList.remove(trackee)
+            continue
+        
+        try:
+            newFriendList = seperateNewfromOld(friendListFromApi, oldJsonData[trackee])
+        except:  # oldData[trackee] might not exist because of new trackee added into the list of trackeeList
+            appendNewTrackee(trackee, friendListFromApi)
+            
+        oldJsonData[trackee] = friendListFromApi # Update json file data
+        appendMessageList(trackee, newFriendList)
+        
+    writeJsonData(oldJsonData)
+    for sendMessage in messageList:
+        bot.send_message(chat_id='', text=sendMessage)
+
 
 def _main():
     try:
         while True:
             compare()
     except:
-        print('Error')
+        print('error')
         return _main()
 
-
-
 _main()
+# hardReset()
 
+# compare()
